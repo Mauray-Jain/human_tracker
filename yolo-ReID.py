@@ -15,7 +15,7 @@ from tqdm import tqdm
 DATA_DIR = "/home/akansh_26/Hackathons/VisionX-AI/Person-Re-Id-Dataset/train"
 DEVICE = "cuda"
 
-MAIN_ENCODING = None
+main_encodings = []
 # STATE = "PICK" # PICK / TRACK
 # user_input = None
 count = 0
@@ -54,7 +54,9 @@ def process_frame(frame, model_yolo, camera_number):
 
     dist = 1000000
 
-    results = model_yolo(frame)
+    results = model_yolo(frame, verbose=False)
+    distances = []
+    bounding_boxes_list = []
 
     for result in results:
         for box, cls, conf in zip(result.boxes.xyxy, result.boxes.cls, result.boxes.conf):
@@ -77,7 +79,7 @@ def process_frame(frame, model_yolo, camera_number):
                     MAIN_ENCODING = model_siamese(img_person.unsqueeze(0))
                     MAIN_ENCODING = MAIN_ENCODING.detach().cpu().numpy()
                     print(f"Enc ID-1: {MAIN_ENCODING}")
-                    
+
             if MAIN_ENCODING is not None and MAIN_ENCODING.any():
                 img_person = frame[int(y1):int(y2), int(x1):int(x2)]
                 img_person = cv2.resize(img_person, (128, 64))
@@ -93,9 +95,26 @@ def process_frame(frame, model_yolo, camera_number):
 
                 threshold = 3
                 if dist < threshold:
-                    cv2.rectangle(frame, pt1, pt2, color=(0, 255, 0), thickness=2)
-                    cv2.putText(frame, f"ID:{1}", (int(x1), int(y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    
+                    distances.append(dist)
+                    bounding_boxes_list.append(box)
+
+    if len(distances) == 1:
+        x1, y1, x2, y2 = bounding_boxes_list[0]
+        pt1 = (int(x1), int(y1))
+        pt2 = (int(x2), int(y2))
+        cv2.rectangle(frame, pt1, pt2, color=(0, 255, 0), thickness=2)
+        cv2.putText(frame, f"ID:{1}", (int(x1), int(y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    else:
+        try:
+            idx = np.argmax(distances)
+            x1, y1, x2, y2 = bounding_boxes_list[idx]
+            pt1 = (int(x1), int(y1))
+            pt2 = (int(x2), int(y2))
+            cv2.rectangle(frame, pt1, pt2, color=(0, 255, 0), thickness=2)
+            cv2.putText(frame, f"ID:{1}", (int(x1), int(y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        except:
+            pass
+
     return frame
 
 
@@ -129,4 +148,3 @@ def euclidean_dist(enc1, enc2):
 
 if __name__ == "__main__":
     main()
-
