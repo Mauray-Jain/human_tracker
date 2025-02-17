@@ -15,7 +15,7 @@ from tqdm import tqdm
 DATA_DIR = "/home/akansh_26/Hackathons/VisionX-AI/Person-Re-Id-Dataset/train"
 DEVICE = "cuda"
 
-main_encodings = []
+MAIN_ENCODING = None
 # STATE = "PICK" # PICK / TRACK
 # user_input = None
 count = 0
@@ -91,7 +91,6 @@ def process_frame(frame, model_yolo, camera_number):
                     person_enc = person_enc.detach().cpu().numpy()
 
                 dist = euclidean_dist(MAIN_ENCODING, person_enc)
-                # print(f"Distance: {dist}, Track ID: {tid}, Class: {cls} (person), Confidence: {conf:.2f}, Box: {box}")
 
                 threshold = 3
                 if dist < threshold:
@@ -106,7 +105,7 @@ def process_frame(frame, model_yolo, camera_number):
         cv2.putText(frame, f"ID:{1}", (int(x1), int(y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
     else:
         try:
-            idx = np.argmax(distances)
+            idx = np.argmin(distances)
             x1, y1, x2, y2 = bounding_boxes_list[idx]
             pt1 = (int(x1), int(y1))
             pt2 = (int(x2), int(y2))
