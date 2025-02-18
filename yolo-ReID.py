@@ -19,8 +19,8 @@ MAIN_ENCODING = {}
 # STATE = "PICK" # PICK / TRACK
 # user_input = None
 count = 0
-URL1 = "./vid1.mp4"
-URL2 = "./vid2.mp4"
+URL1 = "CV Test Dataset/test_case_2/frame_2.mp4"
+URL2 = "/home/akansh_26/Hackathons/VisionX-AI/CV Test Dataset/test_case_2/frame_4.mp4"
 
 
 model_yolo1 = YOLO("yolo11s.pt")

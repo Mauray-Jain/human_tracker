@@ -21,13 +21,23 @@ URL1 = "./vid1.mp4"
 URL2 = "./vid2.mp4"
 
 
+person_box_id = 1
+
 model_yolo1 = YOLO("yolo11s.pt")
 cam1 = cv2.VideoCapture(URL1)
 
 model_yolo2 = YOLO("yolo11s.pt")
 cam2 = cv2.VideoCapture(URL2)
 
+feature_params = dict( maxCorners = 100,
+                       qualityLevel = 0.3,
+                       minDistance = 7,
+                       blockSize = 7 )
+lk_params = dict( winSize  = (15, 15),
+                  maxLevel = 2,
+                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
+# frame1 - 1, 5
 def main():
     global MAIN_ENCODING
     ret1, frame1 = cam1.read()
@@ -45,7 +55,7 @@ def main():
         #     cv2.imshow(f"box{i}", frame1[int(y1):int(y2), int(x1):int(x2)])
         #     if cv2.waitKey(0) == ord("q"):
         #         continue
-        x1, y1, x2, y2 = box[1]
+        x1, y1, x2, y2 = box[person_box_id]
         pt1 = (int(x1), int(y1))
         pt2 = (int(x2), int(y2))
         img_person = frame1[int(y1):int(y2), int(x1):int(x2)]
@@ -59,7 +69,63 @@ def main():
         print(MAIN_ENCODING)
         # cv2.imshow("img_person", frame1[int(y1):int(y2), int(x1):int(x2)])
         # cv2.waitKey(0)
+    
+    X1, X2, Y1, Y2 = 0, 0, 0, 0
+    results = model_yolo2(frame2)
+    for result in results:
+        cls = result.boxes.cls
+        box = result.boxes.xyxy
+        # for i in range(len(box)):
+        #     x1, y1, x2, y2 = box[i]
+        #     pt1 = (int(x1), int(y1))
+        #     pt2 = (int(x2), int(y2))
+        #     cv2.imshow(f"box{i}", frame1[int(y1):int(y2), int(x1):int(x2)])
+        #     if cv2.waitKey(0) == ord("q"):
+        #         continue
+        x1, y1, x2, y2 = box[person_box_id]
+        pt1 = (int(x1), int(y1))
+        pt2 = (int(x2), int(y2))
+        img_person = frame1[int(y1):int(y2), int(x1):int(x2)]
+        img_person = cv2.resize(img_person, (128, 64))
+        img_person = torch.from_numpy(img_person).permute(2, 0, 1) / 255.0
+        model_siamese.eval()
+        with torch.no_grad():
+            img_person = img_person.to(DEVICE)
+            person_enc = model_siamese(img_person.unsqueeze(0))
+            person_enc = person_enc.detach().cpu().numpy()
+
+        dist = euclidean_dist(MAIN_ENCODING, person_enc)
+        distances = []
+        bounding_boxes_list = []
+        threshold = 4
+        if dist < threshold:
+            distances.append(dist)
+            bounding_boxes_list.append(box)
+        x1, x2, y1, y2 = None
+        if len(distances) == 1:
+            x1, y1, x2, y2 = bounding_boxes_list[0]
+            pt1 = (int(x1), int(y1))
+            pt2 = (int(x2), int(y2))
+            cv2.rectangle(frame2, pt1, pt2, color=(0, 255, 0), thickness=2)
+            cv2.putText(frame2, f"ID:{1}", (int(x1), int(y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        else:
+            try:
+                idx = np.argmin(distances)
+                x1, y1, x2, y2 = bounding_boxes_list[idx]
+                pt1 = (int(x1), int(y1))
+                pt2 = (int(x2), int(y2))
+                cv2.rectangle(frame2, pt1, pt2, color=(0, 255, 0), thickness=2)
+                cv2.putText(frame2, f"ID:{1}", (int(x1), int(y1)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            except:
+                pass
+        
+        if x1:
+            X1, X2, Y1, Y2 = x1, x2, y1, y2
  
+
+    old_gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+    p0 = np.array([(X1+X2)//2, (Y1+Y2)//2], dtype=np.float32).reshape(-1, 1, 2)
+
     while True:
         ret1, frame1 = cam1.read()
         ret2, frame2 = cam2.read()
@@ -67,11 +133,28 @@ def main():
         if not ret1 or not ret2:
             break
 
-        annotated_frame1 = process_frame(frame1, model_yolo1, 1)
-        annotated_frame2 = process_frame(frame2, model_yolo2, 2)
+        new_gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+        annotated_frame1  = process_frame(frame1, model_yolo1, 1)
+        # annotated_frame2  = process_frame2(frame2, model_yolo2, 2)
+
+        p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray2, new_gray2, p0, None, **lk_params)
+        if p1 is not None:
+            good_new = p1[st==1]
+            good_old = p0[st==1]
+
+        for i, (new, old) in enumerate(zip(good_new, good_old)):
+            a, b = new.ravel()
+            c, d = old.ravel()
+
+        # cv2.rectangle(frame2, p1[0])
+        print(p1)
+        
+        old_gray2 = new_gray2.copy()
+        p0 = good_new.reshape(-1, 1, 2) 
 
         cv2.imshow("frame1", annotated_frame1)
-        cv2.imshow("frame2", annotated_frame2)
+        cv2.imshow("frame2", frame2)
 
         cv2.waitKey(1)
     cv2.destroyAllWindows()
