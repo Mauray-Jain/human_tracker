@@ -183,7 +183,7 @@ def process_frame(frame, model_yolo, camera_number):
 
             cv2.rectangle(frame, pt1, pt2, color=(0, 255, 0), thickness=2)
             
-
+    print(MAIN_ENCODING)
     return frame
 
 
